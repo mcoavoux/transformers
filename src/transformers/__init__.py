@@ -310,6 +310,9 @@ _import_structure = {
         "Data2VecTextConfig",
         "Data2VecVisionConfig",
     ],
+    "models.pantagruel": [
+        "Data2Vec2MultiConfig",
+    ],
     "models.dbrx": ["DbrxConfig"],
     "models.deberta": [
         "DebertaConfig",
@@ -1699,6 +1702,12 @@ else:
             "Data2VecVisionForSemanticSegmentation",
             "Data2VecVisionModel",
             "Data2VecVisionPreTrainedModel",
+        ]
+    )
+    _import_structure["models.pantagruel"].extend(
+        [
+            "Data2Vec2MultiPreTrainedModel",
+            "Data2Vec2MultiModel",
         ]
     )
     _import_structure["models.dbrx"].extend(
