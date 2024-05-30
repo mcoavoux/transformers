@@ -494,6 +494,12 @@ class ModalitySpecificEncoder(nn.Module):
                 _learned_alibi_bias, alibi_bias=self.alibi_bias
             )
 
+    # Copied from transformers.models.wav2vec2.modeling_wav2vec2.Wav2Vec2FeatureEncoder._freeze_parameters
+    def _freeze_parameters(self):
+        for param in self.parameters():
+            param.requires_grad = False
+        self._requires_grad = False
+
     def convert_padding_mask(self, x, padding_mask):
         return padding_mask
 

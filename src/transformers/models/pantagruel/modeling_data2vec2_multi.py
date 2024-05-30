@@ -21,43 +21,27 @@
 """ PyTorch Data2Vec2 Multi model."""
 import math
 import warnings
-from typing import Optional, Tuple, Union, List, Callable
+from typing import Callable
 from functools import partial
 
-
 import numpy as np
-import torch
-import torch.nn.functional as F
-import torch.utils.checkpoint
+
 from torch import nn
-from torch.nn import CrossEntropyLoss
 
 from ...modeling_utils import PreTrainedModel
 from ...modeling_outputs import (
     Wav2Vec2BaseModelOutput,
 )
-from ...utils import (
-    add_code_sample_docstrings,
-    add_start_docstrings,
-    add_start_docstrings_to_model_forward,
-    logging,
-)
 from .configuration_data2vec2_multi import (
     Data2Vec2MultiConfig,
     D2v2ModalityConfig,
-    Modality,
     D2v2ModalitiesConfig,
-    D2v2AudioConfig,
-    D2v2TextConfig,
-)
-from .utils import (
-    MaskInfo, MaskSeed
 )
 from .modeling_data2vec2_base import (
     ModalitySpecificEncoder,
     AudioEncoder,
     TextEncoder,
-    AltBlock, AltAttention,
+    AltBlock,
 )
 
 
@@ -85,9 +69,7 @@ class Data2Vec2MultiPreTrainedModel(PreTrainedModel):
                 if module.padding_idx is not None:
                     module.weight.data[module.padding_idx].zero_()
             if isinstance(module, AltBlock):
-                normal_(module.q_proj.weight.data)
-                normal_(module.k_proj.weight.data)
-                normal_(module.v_proj.weight.data)
+                normal_(module.attn.proj.weight.data)
             # init strategy for audio encoder
             if isinstance(module, (nn.LayerNorm, nn.GroupNorm)):
                 if module.bias is not None:
@@ -163,6 +145,29 @@ class Data2Vec2MultiModel(Data2Vec2MultiPreTrainedModel):
 
         self.num_updates = 0
 
+        # Initialize weights and apply final processing
+        self.post_init()
+
+    def freeze_feature_extractor(self):
+        """
+        Calling this function will disable the gradient computation for the feature encoder so that its parameters will
+        not be updated during training.
+        """
+        warnings.warn(
+            "The method `freeze_feature_extractor` is deprecated and will be removed in Transformers v5. "
+            "Please use the equivalent `freeze_feature_encoder` method instead.",
+            FutureWarning,
+        )
+        self.freeze_feature_encoder()
+
+    def freeze_feature_encoder(self):
+        """
+        Calling this function will disable the gradient computation for the feature encoder so that its parameter will
+        not be updated during training.
+        """
+        for mod in self.modalities:
+            self.modality_encoders[mod]._freeze_parameters()
+
     def make_modality_encoder(
         self,
         cfg: D2v2ModalityConfig,
@@ -205,8 +210,9 @@ class Data2Vec2MultiModel(Data2Vec2MultiPreTrainedModel):
             mask_seeds=None,
             precomputed_mask=None,
         )
-
         x = extractor_out["x"]
+        extract_features = x
+
         encoder_mask = extractor_out["encoder_mask"]
         masked_padding_mask = extractor_out["padding_mask"]
         masked_alibi_bias = extractor_out.get("alibi_bias", None)
@@ -247,10 +253,9 @@ class Data2Vec2MultiModel(Data2Vec2MultiPreTrainedModel):
                 :, feature_extractor.modality_cfg.num_extra_tokens :
             ]
 
-        return {
-            "x": x,
-            "padding_mask": masked_padding_mask,
-            "layer_results": layer_results,
-            "mask": encoder_mask,
-        }
-        
+        return Wav2Vec2BaseModelOutput(
+            last_hidden_state=x,
+            extract_features=extract_features,
+            hidden_states=layer_results,
+            attentions=None, # switch to manual implementation with fast=False in forward pass of AltAttention as pytorch's dspa does not output attention weights
+        )
