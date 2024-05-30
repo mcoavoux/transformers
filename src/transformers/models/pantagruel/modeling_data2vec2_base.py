@@ -1148,8 +1148,8 @@ class TextEncoder(ModalitySpecificEncoder):
         layer_norm_first: bool,
         alibi_biases: Dict,
     ):
-        self.pad_idx = task.source_dictionary.pad()
-        self.vocab_size = len(task.source_dictionary)
+        self.pad_idx = modality_cfg.pad_token_id
+        self.vocab_size = modality_cfg.vocab_size
 
         local_encoder = TextLocalEncoder(
             vocab_size=self.vocab_size,

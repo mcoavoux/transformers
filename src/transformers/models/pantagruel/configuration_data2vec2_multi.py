@@ -131,6 +131,11 @@ class D2v2TextConfig(D2v2ModalityConfig):
     def __init__(
         self, 
         type=Modality.TEXT,
+        vocab_size=49937,
+        unk_token_id=3,
+        bos_token_id=0,
+        eos_token_id=2,
+        pad_token_id=1,
         max_source_positions=512,
         learned_pos=True,
         dropout=0.1,
@@ -140,6 +145,11 @@ class D2v2TextConfig(D2v2ModalityConfig):
         **kwargs,
     ):
         super().__init__(type=type, **kwargs)
+        self.vocab_size = vocab_size
+        self.unk_token_id = unk_token_id
+        self.bos_token_id = bos_token_id
+        self.eos_token_id = eos_token_id
+        self.pad_token_id = pad_token_id
         self.max_source_positions = max_source_positions
         self.learned_pos = learned_pos
         self.dropout = dropout
