@@ -148,9 +148,10 @@ def test_converted_weights(args):
             add_prefix_space=True,
         )
         encoded = tokenizer.encode(SAMPLE_TEXT)
+        encoded_ids = [BOS_TOKEN_ID] + encoded.ids # need to prepend BOS token <s>
         print(f"encoded.ids: {encoded.ids}")
         input_values = torch.tensor(
-            encoded.ids, dtype=torch.int64
+            encoded_ids, dtype=torch.int64
         ).unsqueeze(0)
         print(f"Forward using HF model...")
         hf_output = hf_model(input_values, padding_mask=None, mode="TEXT", mask=False)
