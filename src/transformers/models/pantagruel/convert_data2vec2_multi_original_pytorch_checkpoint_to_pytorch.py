@@ -1,6 +1,9 @@
 # coding=utf-8
 # Modified by Hang Le (hangtp.le@gmail.com)
-# Original copyrights below
+# Copyright (c) Facebook, Inc. and its affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
 #
 # Copyright 2021 The HuggingFace Inc. team.
 #
@@ -39,16 +42,33 @@ BOS_TOKEN, BOS_TOKEN_ID = "<s>", 0
 EOS_TOKEN, EOS_TOKEN_ID = "</s>", 2
 PAD_TOKEN, PAD_TOKEN_ID = "<pad>", 1
 
-FAIRSEQ = "/linkhome/rech/genlig01/umz16dj/code/fairspeech"
+FAIRSEQ = "/lus/home/CT10/c1615074/tphle/code/fairspeech"
 SAMPLE_TEXT = "Bonjour le monde !!"
 
 
 def compare_tensors(tensor_a, tensor_b):
     max_absolute_diff = torch.max(torch.abs(tensor_a - tensor_b)).item()
-    print(f"max_absolute_diff = {max_absolute_diff}")  # ~ 1e-7
+    if max_absolute_diff > 0.0:
+        raise ValueError(f"max_absolute_diff = {max_absolute_diff}")  # ~ 1e-7
     success = torch.allclose(tensor_a, tensor_b, atol=1e-3)
     if not success:
         raise ValueError("!!!Something went wrong!!!")
+    
+
+def compare_outputs(input_values, fairseq_model, hf_model, mode, padding_mask=None):
+    print(f"Forward using fairseq model...")
+    fairseq_output = fairseq_model(
+        source=input_values, padding_mask=padding_mask, mask=False, features_only=True
+    )
+    print(f"Forward using HF model...")
+    hf_output = hf_model(
+        input_values, padding_mask=padding_mask, mode=mode, mask=False
+    )
+
+    print(f"Comparing outputs...")
+    compare_tensors(hf_output.last_hidden_state, fairseq_output["x"])
+    print(f'MATCHED!')
+    print("*"*100)
 
 
 @torch.no_grad()
@@ -65,13 +85,18 @@ def convert_data2vec2_checkpoint(args):
     model_config = {k: v for k, v in fairseq_model_config.items() if not "ema" in k and not "decoder" in k and not "loss" in k}
 
     if args.vocab_dir is not None:
+        # loading text model
         state = checkpoint_utils.load_checkpoint_to_cpu(checkpoint_path, {})
-        w2v_args = state.get("cfg", None)
-        assert w2v_args is not None
-        w2v_args.criterion = None
-        w2v_args.lr_scheduler = None
-        task = tasks.setup_task(w2v_args.task, from_checkpoint=True)
-        model_config["vocab_size"] = len(task.source_dictionary)
+        pretrained_args = state.get("cfg", None)
+        assert pretrained_args is not None
+        pretrained_args.criterion = None
+        pretrained_args.lr_scheduler = None
+        pretrained_args.task.data = "/lus/work/CT10/c1615074/tphle/Data/prepared/Wikipedia/frwiki_20190701/data-bin/byteBPE"
+
+        task = tasks.setup_task(pretrained_args.task, from_checkpoint=True)
+        model_config["modalities"]["text"]["vocab_size"] = len(task.source_dictionary)
+        print(f"Vocab size: {len(task.source_dictionary)}")
+
         tokenizer = ByteLevelBPETokenizer(
             f"{args.vocab_dir}/{args.vocab_name}-vocab.json",
             f"{args.vocab_dir}/{args.vocab_name}-merges.txt",
@@ -82,22 +107,30 @@ def convert_data2vec2_checkpoint(args):
         model_config["eos_token_id"] = tokenizer.token_to_id(EOS_TOKEN)
         model_config["pad_token_id"] = tokenizer.token_to_id(PAD_TOKEN)
 
-    configuration = Data2Vec2MultiConfig(**model_config)
-    print(f"*** HuggingFace configuration ***\n{configuration}")
+    # configuration
+    configuration = Data2Vec2MultiConfig()
+    configuration.update(model_config)
 
+    # pre-trained weights
     hf_model = Data2Vec2MultiModel(configuration)
     keys = list(state_dict.keys())
     for k in keys:
         if "ema" in k or "decoder" in k:
             del state_dict[k]
     hf_model.load_state_dict(state_dict, strict=True)
+
+    # saving pretrained model and configuration
+    print(f"Saving pre-trained configuration and pre-trained weights...")
     hf_model.save_pretrained(pytorch_dump_folder_path, safe_serialization=False)
 
+    # comparing with fairseq state dict
+    print("Loading from pretrained folder ...")
     test_model = Data2Vec2MultiModel.from_pretrained(pytorch_dump_folder_path)
     test_model.eval()
     test_model.freeze_feature_encoder()
     for n, p in test_model.named_parameters():
         compare_tensors(p, state_dict[n])
+    print(f"Weights matched!")
 
 
 @torch.no_grad()
@@ -109,8 +142,8 @@ def test_converted_weights(args):
     hf_model = Data2Vec2MultiModel.from_pretrained(pytorch_dump_folder_path)
     print(f"Pre-trained weights loaded to HF model!")
     hf_model.eval()
+    hf_model.freeze_feature_encoder()
 
-    # checking AUDIO model
     # fairseq checkpoint
     os.chdir(FAIRSEQ)
     print(f"Loading fairseq model...")
@@ -120,6 +153,10 @@ def test_converted_weights(args):
     assert pretrained_args is not None
     pretrained_args.criterion = None
     pretrained_args.lr_scheduler = None
+    # print(f"pretrained_args.data: {pretrained_args.data}")
+    if args.vocab_dir is not None:
+        pretrained_args.task.data = "/lus/work/CT10/c1615074/tphle/Data/prepared/Wikipedia/frwiki_20190701/data-bin/byteBPE"
+
     task = tasks.setup_task(pretrained_args.task, from_checkpoint=True)
     print(f"fairseq model args: {pretrained_args.model}")
     fairseq_model = task.build_model(pretrained_args.model, from_checkpoint=True)
@@ -127,20 +164,17 @@ def test_converted_weights(args):
     fairseq_model.remove_pretraining_modules(modality="TEXT" if args.vocab_dir is not None else "AUDIO")
     fairseq_model.eval()
     print(f"Pre-trained weights loaded to fairseq model!")
+    mode = "TEXT" if args.vocab_dir is not None else "AUDIO"
 
     if args.vocab_dir is not None:
+        # text model
         configuration = hf_model.config
         print(f"Comparing outputs with randomized tensors...")
-        input_values = torch.randint(configuration.vocab_size - 1, (1, configuration.modalities["text"]["max_source_positions"]), dtype=torch.int64)
-        print(f"Forward using HF model...")
-        hf_output = hf_model(input_values, padding_mask=None, mode="TEXT", mask=False)
-        print(f"Forward using fairseq model...")
-        fairseq_output = fairseq_model(source=input_values, padding_mask=None, mask=False, features_only=True)
-        print(f"Comparing outputs...")
-        compare_tensors(hf_output.last_hidden_state, fairseq_output["x"])
-        print(f'MATCHED!')
-        print("*"*100)
-
+        input_values = torch.randint(configuration.modalities.text.vocab_size - 1, (1, configuration.modalities.text.max_source_positions), dtype=torch.int64)
+        compare_outputs(
+            input_values, fairseq_model, hf_model, mode=mode
+        )
+        
         print(f"Comparing outputs for SAMPLE TEXT: {SAMPLE_TEXT}")
         tokenizer = ByteLevelBPETokenizer(
             f"{args.vocab_dir}/{args.vocab_name}-vocab.json",
@@ -153,35 +187,15 @@ def test_converted_weights(args):
         input_values = torch.tensor(
             encoded_ids, dtype=torch.int64
         ).unsqueeze(0)
-        print(f"Forward using HF model...")
-        hf_output = hf_model(input_values, padding_mask=None, mode="TEXT", mask=False)
-        print(f"Forward using fairseq model...")
-        fairseq_output = fairseq_model(source=input_values, padding_mask=None, mask=False, features_only=True)
-        print(f"Comparing outputs...")
-        compare_tensors(hf_output.last_hidden_state, fairseq_output["x"])
-        print(f'MATCHED!')
-        print("*"*100)
-        
+        compare_outputs(
+            input_values, fairseq_model, hf_model, mode=mode
+        )
     else:
-        # # compare keys and parameters
-        # hf_keys = [n for n, _ in hf_model.named_parameters()]
-        # fairseq_keys = [n for n, _ in fairseq_model.named_parameters()]
-        # diffs = list(set(fairseq_keys) - set(hf_keys))
-        # if len(diffs) > 0:
-        #     print(f"diffs: {diffs}")
-        # for n, p in hf_model.named_parameters():
-        #     compare_tensors(p, fairseq_model.state_dict()[n])
-
         print(f"Comparing outputs with randomized tensors...")
         input_values = torch.randn((3, 320000), dtype=torch.float32)
-        print(f"Forward using HF model...")
-        hf_output = hf_model(input_values, padding_mask=None, mode="AUDIO", mask=False)
-        print(f"Forward using fairseq model...")
-        fairseq_output = fairseq_model(source=input_values, padding_mask=None, mask=False, features_only=True)
-        print(f"Comparing outputs...")
-        compare_tensors(hf_output.last_hidden_state, fairseq_output["x"])
-        print(f'MATCHED!')
-        print("*"*100)
+        compare_outputs(
+            input_values, fairseq_model, hf_model, mode=mode
+        )
 
         print(f"Comparing outputs from dummy datasets...")
         print("Loading processor...")
@@ -192,16 +206,14 @@ def test_converted_weights(args):
         inputs = processor(input_audio, return_tensors="pt", padding=True)
         input_values = inputs.input_values
         attention_mask = inputs.attention_mask
+        compare_outputs(
+            input_values,
+            fairseq_model,
+            hf_model, 
+            mode=mode,
+            padding_mask=(1-attention_mask),
+        )
 
-        print(f"Forward using HF model...")
-        hf_output = hf_model(input_values, padding_mask=(1-attention_mask), mode="AUDIO", mask=False)
-        print(f"Forward using fairseq model...")
-        fairseq_output = fairseq_model(source=input_values, padding_mask=(1-attention_mask), mask=False, features_only=True)
-        print(f"Comparing outputs...")
-        compare_tensors(hf_output.last_hidden_state, fairseq_output["x"])
-        print(f'MATCHED!')
-        print("*"*100)
-    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

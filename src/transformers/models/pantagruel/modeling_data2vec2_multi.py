@@ -1,8 +1,11 @@
 # coding=utf-8
-# Modified by Hang Le (hangtp.le@gmail.com)
-# Original copyrights by the fairseq authors and HuggingFace team
-
-# Copyright 2021 The Fairseq Authors and the HuggingFace Inc. team. All rights reserved.
+#
+# Copyright (c) Facebook, Inc. and its affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+#
+# Copyright 2022 the HuggingFace Inc. team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -35,7 +38,6 @@ from ...modeling_outputs import (
 from .configuration_data2vec2_multi import (
     Data2Vec2MultiConfig,
     D2v2ModalityConfig,
-    D2v2ModalitiesConfig,
 )
 from .modeling_data2vec2_base import (
     ModalitySpecificEncoder,
@@ -88,15 +90,27 @@ class Data2Vec2MultiPreTrainedModel(PreTrainedModel):
         else:
             _init(module)
 
+    # @classmethod
+    # def from_pretrained(
+    #     cls,
+    #     pretrained_model_name_or_path,
+    #     *model_args,
+    #     **kwargs,
+    # ):
+    #     config = cls.config_class()
+    #     config.from_pretrained(pretrained_model_name_or_path)
+    #     print(f"Loading configuration from pre-trained model: {type(config)}")
+    #     return super().from_pretrained(pretrained_model_name_or_path, 
+    #                                    *model_args, 
+    #                                    config, 
+    #                                    **kwargs,)
+        
 
 class Data2Vec2MultiModel(Data2Vec2MultiPreTrainedModel):
     def __init__(self, config: Data2Vec2MultiConfig):
         super().__init__(config)
         self.config = config
-        modalities_cfg = D2v2ModalitiesConfig(
-            audio_args=config.modalities["audio"],
-            text_args=config.modalities["text"],
-        )
+        modalities_cfg = config.modalities
         self.modalities = [config.supported_modality]
 
         make_layer_norm = partial(

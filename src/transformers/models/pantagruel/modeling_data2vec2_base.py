@@ -1,8 +1,12 @@
 # coding=utf-8
-# Modified by Hang Le (hangtp.le@gmail.com)
-# Original copyrights by the fairseq authors and HuggingFace team
-
-# Copyright 2021 The Fairseq Authors and the HuggingFace Inc. team. All rights reserved.
+#
+# Copyright (c) Facebook, Inc. and its affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+#
+# 
+# Copyright 2022 the HuggingFace Inc. team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,29 +20,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Copyright from Fairseq
 
 """ PyTorch Data2Vec2 Base model."""
 import math
-import warnings
 from typing import Optional, Tuple, Dict, List, Callable, Any
 from functools import partial
-
 
 import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
-from torch.nn import CrossEntropyLoss
 from torch import Tensor
 
-from ...modeling_utils import PreTrainedModel
 from .configuration_data2vec2_multi import (
-    Data2Vec2MultiConfig,
     D2v2ModalityConfig,
     D2v2AudioConfig,
     D2v2TextConfig,
-    Modality,
 )
 from .utils import (
     _learned_alibi_bias,
