@@ -24,24 +24,23 @@ from transformers import (
 BOS_TOKEN = "<s>"
 
 pretrained_dir = Path("/lus/work/CT10/lig3801/SHARED/pretrained_models")
-
 audio_model_dir = pretrained_dir / "Speech_Base_fr_1K" / "HuggingFace"
 text_model_dir = pretrained_dir / "Text_Base_fr_4GB_v0" / "HuggingFace"
 
-# for audio input
-hf_model = Data2Vec2MultiModel.from_pretrained(audio_model_dir)
+mode = "AUDIO"
+model_dir = audio_model_dir if mode == "AUDIO" else text_model_dir
+
+# load speech-only or text-only pretrained model
+hf_model = Data2Vec2MultiModel.from_pretrained(model_dir)
 hf_model.eval()
 hf_model.freeze_feature_encoder()
 
+# audio input
 input_values = torch.randn((3, 320000), dtype=torch.float32)
 hf_output = hf_model(input_values, mode="AUDIO")
 extracted_features = hf_output.last_hidden_state
 
-# for text input
-hf_model = Data2Vec2MultiModel.from_pretrained(text_model_dir)
-hf_model.eval()
-hf_model.freeze_feature_encoder()
-
+# text input
 SAMPLE_TEXT = "Bonjour le monde !!"
 
 tokenizer = ByteLevelBPETokenizer(
@@ -51,9 +50,7 @@ tokenizer = ByteLevelBPETokenizer(
 encoded = tokenizer.encode(SAMPLE_TEXT)
 # prepend BOS token <s>
 encoded_ids = [tokenizer.token_to_id(BOS_TOKEN)] + encoded.ids
-input_values = torch.tensor(
-    encoded_ids, dtype=torch.int64
-).unsqueeze(0)
+input_values = torch.tensor(encoded_ids, dtype=torch.int64).unsqueeze(0)
 hf_output = hf_model(input_values, mode="TEXT")
 extracted_features = hf_output.last_hidden_state
 ```
