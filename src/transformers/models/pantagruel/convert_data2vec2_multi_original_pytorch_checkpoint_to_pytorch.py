@@ -58,11 +58,11 @@ def compare_tensors(tensor_a, tensor_b):
 def compare_outputs(input_values, fairseq_model, hf_model, mode, padding_mask=None):
     print(f"Forward using fairseq model...")
     fairseq_output = fairseq_model(
-        source=input_values, padding_mask=padding_mask, mask=False, features_only=True
+        source=input_values, padding_mask=padding_mask, features_only=True
     )
     print(f"Forward using HF model...")
     hf_output = hf_model(
-        input_values, padding_mask=padding_mask, mode=mode, mask=False
+        input_values, padding_mask=padding_mask, mode=mode
     )
 
     print(f"Comparing outputs...")

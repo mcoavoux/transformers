@@ -211,7 +211,7 @@ class Data2Vec2MultiModel(Data2Vec2MultiPreTrainedModel):
         self,
         input_values,
         padding_mask=None,
-        mask=True,
+        mask=False,
         mode=None,
     ):
         feature_extractor = self.modality_encoders[mode]
