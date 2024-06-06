@@ -42,7 +42,7 @@ BOS_TOKEN, BOS_TOKEN_ID = "<s>", 0
 EOS_TOKEN, EOS_TOKEN_ID = "</s>", 2
 PAD_TOKEN, PAD_TOKEN_ID = "<pad>", 1
 
-FAIRSEQ = "/lus/home/CT10/c1615074/tphle/code/fairspeech"
+FAIRSEQ = "/linkhome/rech/genlig01/umz16dj/code/fairspeech"
 SAMPLE_TEXT = "Bonjour le monde !!"
 
 
@@ -58,7 +58,7 @@ def compare_tensors(tensor_a, tensor_b):
 def compare_outputs(input_values, fairseq_model, hf_model, mode, padding_mask=None):
     print(f"Forward using fairseq model...")
     fairseq_output = fairseq_model(
-        source=input_values, padding_mask=padding_mask, features_only=True
+        source=input_values, mask=False, padding_mask=padding_mask, features_only=True
     )
     print(f"Forward using HF model...")
     hf_output = hf_model(
@@ -91,7 +91,7 @@ def convert_data2vec2_checkpoint(args):
         assert pretrained_args is not None
         pretrained_args.criterion = None
         pretrained_args.lr_scheduler = None
-        pretrained_args.task.data = "/lus/work/CT10/c1615074/tphle/Data/prepared/Wikipedia/frwiki_20190701/data-bin/byteBPE"
+        # pretrained_args.task.data = "/lus/work/CT10/c1615074/tphle/Data/prepared/Wikipedia/frwiki_20190701/data-bin/byteBPE"
 
         task = tasks.setup_task(pretrained_args.task, from_checkpoint=True)
         model_config["modalities"]["text"]["vocab_size"] = len(task.source_dictionary)
@@ -154,8 +154,8 @@ def test_converted_weights(args):
     pretrained_args.criterion = None
     pretrained_args.lr_scheduler = None
     # print(f"pretrained_args.data: {pretrained_args.data}")
-    if args.vocab_dir is not None:
-        pretrained_args.task.data = "/lus/work/CT10/c1615074/tphle/Data/prepared/Wikipedia/frwiki_20190701/data-bin/byteBPE"
+    # if args.vocab_dir is not None:
+    #     pretrained_args.task.data = "/lus/work/CT10/c1615074/tphle/Data/prepared/Wikipedia/frwiki_20190701/data-bin/byteBPE"
 
     task = tasks.setup_task(pretrained_args.task, from_checkpoint=True)
     print(f"fairseq model args: {pretrained_args.model}")
