@@ -16,37 +16,56 @@ To extract representations for a given audio or textual input, the pre-trained s
 ```python
 from pathlib import Path
 import torch
+import torch.nn.functional as F
 from tokenizers import ByteLevelBPETokenizer
 from transformers import (
     Data2Vec2MultiConfig,
     Data2Vec2MultiModel,
 )
-BOS_TOKEN = "<s>"
+UNK_TOKEN, UNK_TOKEN_ID = "<unk>", 3
+BOS_TOKEN, BOS_TOKEN_ID = "<s>", 0
+EOS_TOKEN, EOS_TOKEN_ID = "</s>", 2
+PAD_TOKEN, PAD_TOKEN_ID = "<pad>", 1
+MASK_TOKEN, MASK_TOKEN_ID = "<mask>", 4
+SPECIAL_TOKENS = [
+            BOS_TOKEN,
+            PAD_TOKEN,
+            EOS_TOKEN,
+            UNK_TOKEN,
+            MASK_TOKEN,
+        ]
 
 pretrained_dir = Path("/lus/work/CT10/lig3801/SHARED/pretrained_models")
 audio_model_dir = pretrained_dir / "Speech_Base_fr_1K" / "HuggingFace"
 text_model_dir = pretrained_dir / "Text_Base_fr_4GB_v0" / "HuggingFace"
 
-mode = "AUDIO"
-model_dir = audio_model_dir if mode == "AUDIO" else text_model_dir
-
-# load speech-only or text-only pretrained model
-hf_model = Data2Vec2MultiModel.from_pretrained(model_dir)
+# SPEECH-ONLY MODEL
+hf_model = Data2Vec2MultiModel.from_pretrained(audio_model_dir)
 hf_model.eval()
 hf_model.freeze_feature_encoder()
 
-# audio input
+# Important: normalized audio input signal
 input_values = torch.randn((3, 320000), dtype=torch.float32)
-hf_output = hf_model(input_values, mode="AUDIO")
+with torch.no_grad():
+    normalized_input_values = F.layer_norm(input_values, input_values.size()[1:])
+
+hf_output = hf_model(normalized_input_values, mode="AUDIO")
 extracted_features = hf_output.last_hidden_state
 
-# text input
+# TEXT-ONLY MODEL
+hf_model = Data2Vec2MultiModel.from_pretrained(text_model_dir)
+hf_model.eval()
+hf_model.freeze_feature_encoder()
+
 SAMPLE_TEXT = "Bonjour le monde !!"
 
 tokenizer = ByteLevelBPETokenizer(
     (text_model_dir / "encoder.json").as_posix(),
     (text_model_dir / "vocab.bpe").as_posix(),
-    add_prefix_space=True)
+    add_prefix_space=False,
+    unicode_normalizer="nfc")
+tokenizer.add_special_tokens(SPECIAL_TOKENS)
+
 encoded = tokenizer.encode(SAMPLE_TEXT)
 # prepend BOS token <s>
 encoded_ids = [tokenizer.token_to_id(BOS_TOKEN)] + encoded.ids

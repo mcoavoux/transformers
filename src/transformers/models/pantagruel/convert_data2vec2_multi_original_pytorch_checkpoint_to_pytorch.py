@@ -1,5 +1,5 @@
 # coding=utf-8
-# Modified by Hang Le (hangtp.le@gmail.com)
+#
 # Copyright (c) Facebook, Inc. and its affiliates.
 #
 # This source code is licensed under the MIT license found in the
@@ -32,6 +32,8 @@ from fairseq import checkpoint_utils
 from datasets import load_dataset
 from tokenizers import ByteLevelBPETokenizer
 
+import torch.nn.functional as F
+
 from transformers import (
     Wav2Vec2Processor,
     Data2Vec2MultiConfig,
@@ -41,6 +43,14 @@ UNK_TOKEN, UNK_TOKEN_ID = "<unk>", 3
 BOS_TOKEN, BOS_TOKEN_ID = "<s>", 0
 EOS_TOKEN, EOS_TOKEN_ID = "</s>", 2
 PAD_TOKEN, PAD_TOKEN_ID = "<pad>", 1
+MASK_TOKEN, MASK_TOKEN_ID = "<mask>", 4
+SPECIAL_TOKENS = [
+            BOS_TOKEN,
+            PAD_TOKEN,
+            EOS_TOKEN,
+            UNK_TOKEN,
+            MASK_TOKEN,
+        ]
 
 FAIRSEQ = "/linkhome/rech/genlig01/umz16dj/code/fairspeech"
 SAMPLE_TEXT = "Bonjour le monde !!"
@@ -100,8 +110,11 @@ def convert_data2vec2_checkpoint(args):
         tokenizer = ByteLevelBPETokenizer(
             f"{args.vocab_dir}/{args.vocab_name}-vocab.json",
             f"{args.vocab_dir}/{args.vocab_name}-merges.txt",
-            add_prefix_space=True,
+            add_prefix_space=False,
+            unicode_normalizer="nfc",
+
         )
+        tokenizer.add_special_tokens(SPECIAL_TOKENS)
         model_config["unk_token_id"] = tokenizer.token_to_id(UNK_TOKEN)
         model_config["bos_token_id"] = tokenizer.token_to_id(BOS_TOKEN)
         model_config["eos_token_id"] = tokenizer.token_to_id(EOS_TOKEN)
@@ -179,8 +192,15 @@ def test_converted_weights(args):
         tokenizer = ByteLevelBPETokenizer(
             f"{args.vocab_dir}/{args.vocab_name}-vocab.json",
             f"{args.vocab_dir}/{args.vocab_name}-merges.txt",
-            add_prefix_space=True,
+            add_prefix_space=False,
+            unicode_normalizer="nfc",
         )
+        tokenizer.add_special_tokens(SPECIAL_TOKENS)
+        print(f'unk_token_id: {tokenizer.token_to_id(UNK_TOKEN)}')
+        print(f'bos_token_id: {tokenizer.token_to_id(BOS_TOKEN)}')
+        print(f'eos_token_id: {tokenizer.token_to_id(EOS_TOKEN)}')
+        print(f'pad_token_id: {tokenizer.token_to_id(PAD_TOKEN)}')
+
         encoded = tokenizer.encode(SAMPLE_TEXT)
         encoded_ids = [BOS_TOKEN_ID] + encoded.ids # need to prepend BOS token <s>
         print(f"encoded.ids: {encoded.ids}")
@@ -193,8 +213,10 @@ def test_converted_weights(args):
     else:
         print(f"Comparing outputs with randomized tensors...")
         input_values = torch.randn((3, 320000), dtype=torch.float32)
+        with torch.no_grad():
+            normalized_input_values = F.layer_norm(input_values, input_values.size()[1:])
         compare_outputs(
-            input_values, fairseq_model, hf_model, mode=mode
+            normalized_input_values, fairseq_model, hf_model, mode=mode
         )
 
         print(f"Comparing outputs from dummy datasets...")
