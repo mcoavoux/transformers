@@ -60,8 +60,8 @@ hf_model.freeze_feature_encoder()
 SAMPLE_TEXT = "Bonjour le monde !!"
 
 tokenizer = ByteLevelBPETokenizer(
-    (text_model_dir / "encoder.json").as_posix(),
-    (text_model_dir / "vocab.bpe").as_posix(),
+    (text_model_dir / "bpe-bytelevel-vocab.json").as_posix(),
+    (text_model_dir / "bpe-bytelevel-merges.txt").as_posix(),
     add_prefix_space=False,
     unicode_normalizer="nfc")
 tokenizer.add_special_tokens(SPECIAL_TOKENS)
